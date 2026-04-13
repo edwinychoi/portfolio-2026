@@ -91,13 +91,20 @@ function fragmentCommit(segs) {
   return f;
 }
 
-function splitHeadingByVisualLines(heading) {
+function splitHeadingByVisualLines(heading, widthRetry) {
   const segs = collectHeadingSegments(heading);
   if (!segs.length) return;
 
   const cs = getComputedStyle(heading);
-  const w = heading.getBoundingClientRect().width;
-  if (w < 1) return;
+  const rawW = heading.clientWidth || heading.getBoundingClientRect().width;
+  if (rawW < 1) {
+    const next = typeof widthRetry === "number" ? widthRetry : 0;
+    if (next < 12) {
+      requestAnimationFrame(() => splitHeadingByVisualLines(heading, next + 1));
+    }
+    return;
+  }
+  const w = Math.round(rawW);
 
   const meas = document.createElement("div");
   meas.setAttribute("aria-hidden", "true");
@@ -109,6 +116,8 @@ function splitHeadingByVisualLines(heading) {
     "pointer-events:none",
     "box-sizing:border-box",
     "width:" + w + "px",
+    "max-width:100%",
+    "min-width:0",
     "font-family:" + cs.fontFamily,
     "font-size:" + cs.fontSize,
     "font-weight:" + cs.fontWeight,
@@ -116,6 +125,7 @@ function splitHeadingByVisualLines(heading) {
     "letter-spacing:" + cs.letterSpacing,
     "line-height:" + cs.lineHeight,
     "word-break:break-word",
+    "overflow-wrap:break-word",
   ].join(";");
   document.body.appendChild(meas);
 
@@ -185,6 +195,72 @@ function initHeroLineReveal() {
 
 const debouncedHeroSplit = debounce(runHeroLineSplit, 180);
 
+/** Matches `styles.css` mobile breakpoint for layout. */
+const MOBILE_INTERACTION_MQ = window.matchMedia("(max-width: 767px)");
+
+/** When the project *copy* (title/body) nears the viewport — later than the image alone. */
+const MOBILE_PROJECT_TRIGGER_IO = {
+  root: null,
+  rootMargin: "0px 0px -22% 0px",
+  threshold: 0.18,
+};
+
+function isMobileInteractionMode() {
+  return MOBILE_INTERACTION_MQ.matches;
+}
+
+function projectCopyForMedia(mediaEl) {
+  return mediaEl.closest(".project__inner")?.querySelector(".project__copy") ?? null;
+}
+
+/**
+ * CSS-only hover effects (canvas, COVID stack, SHR zoom, SDOH zoom): on narrow viewports,
+ * add a class when the project *text* block nears the viewport — once — mirroring :hover in CSS.
+ */
+function initCssHoverFallbackOnScroll() {
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+  const selectors = [
+    ".project__media--canvas-hover",
+    ".project__media--c19-stack",
+    ".project__media--shr-hover",
+    ".project__media--sdoh-zoom",
+  ];
+
+  const mediasToArm = () =>
+    Array.from(document.querySelectorAll(selectors.join(","))).filter(
+      (el) => !el.classList.contains("project__media--interaction-done")
+    );
+
+  const io = new IntersectionObserver((entries, obs) => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue;
+      const target = entry.target;
+      const media =
+        target.classList.contains("project__copy") && target.previousElementSibling?.classList.contains("project__media")
+          ? target.previousElementSibling
+          : target.classList.contains("project__media")
+            ? target
+            : null;
+      if (media) {
+        media.classList.add("project__media--interaction-done");
+      }
+      obs.unobserve(target);
+    }
+  }, MOBILE_PROJECT_TRIGGER_IO);
+
+  function observeEligible() {
+    if (!isMobileInteractionMode()) return;
+    mediasToArm().forEach((media) => {
+      const copy = projectCopyForMedia(media);
+      io.observe(copy ?? media);
+    });
+  }
+
+  observeEligible();
+  MOBILE_INTERACTION_MQ.addEventListener("change", observeEligible);
+}
+
 function initWorkbenchHoverSequence() {
   const root = document.querySelector(".project__media--workbench-hover");
   if (!root) return;
@@ -219,7 +295,7 @@ function initWorkbenchHoverSequence() {
       return;
     }
 
-    // On hover, jump immediately to the next frame.
+    // Desktop hover: jump immediately to the next frame; mobile scroll: same, once.
     setFrame(1);
     for (let i = 2; i < frames.length; i++) {
       timers.push(
@@ -235,15 +311,61 @@ function initWorkbenchHoverSequence() {
     setFrame(0);
   }
 
-  root.addEventListener("pointerenter", runSequence);
-  root.addEventListener("pointerleave", resetToFirstFrame);
+  function onEnter() {
+    runSequence();
+  }
 
-  setFrame(0);
+  function onLeave() {
+    resetToFirstFrame();
+  }
+
+  let workbenchIo = null;
+  let scrollPlayed = false;
+
+  function disconnectIo() {
+    if (!workbenchIo) return;
+    workbenchIo.disconnect();
+    workbenchIo = null;
+  }
+
+  function bindWorkbenchInteraction() {
+    root.removeEventListener("pointerenter", onEnter);
+    root.removeEventListener("pointerleave", onLeave);
+    disconnectIo();
+
+    if (isMobileInteractionMode()) {
+      if (scrollPlayed) {
+        return;
+      }
+      const copyEl = projectCopyForMedia(root);
+      workbenchIo = new IntersectionObserver(
+        (entries, obs) => {
+          for (const entry of entries) {
+            if (!entry.isIntersecting || scrollPlayed) continue;
+            scrollPlayed = true;
+            runSequence();
+            obs.unobserve(entry.target);
+          }
+        },
+        MOBILE_PROJECT_TRIGGER_IO
+      );
+      workbenchIo.observe(copyEl ?? root);
+      setFrame(0);
+    } else {
+      root.addEventListener("pointerenter", onEnter);
+      root.addEventListener("pointerleave", onLeave);
+      setFrame(0);
+    }
+  }
+
+  bindWorkbenchInteraction();
+  MOBILE_INTERACTION_MQ.addEventListener("change", bindWorkbenchInteraction);
 }
 
 document.addEventListener("DOMContentLoaded", () => {
   initHeroLineReveal();
   initWorkbenchHoverSequence();
+  initCssHoverFallbackOnScroll();
   window.addEventListener("resize", debouncedHeroSplit, { passive: true });
 
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
