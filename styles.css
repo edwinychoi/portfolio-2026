@@ -301,7 +301,13 @@ main > .project:first-child {
   transform: scale(1.06);
 }
 
-/* Workbench storyboard project — hover steps 0→5, ends on home_workbench_animation_6.png */
+/* Workbench — fixed 3:2 viewport; banner + library layered inside */
+.project__media--workbench-hover {
+  display: block;
+  align-self: stretch;
+  width: 100%;
+}
+
 .project__media--workbench-hover .workbench-hover__stack {
   --library-scroll-y: 0px;
   position: relative;
@@ -333,9 +339,10 @@ main > .project:first-child {
   display: block;
   width: 100%;
   height: auto;
+  max-width: none;
+  max-height: none;
   object-fit: contain;
   object-position: top center;
-  max-height: none;
   z-index: 2;
   border-radius: 0;
 }
@@ -347,10 +354,11 @@ main > .project:first-child {
   display: block;
   width: 90%;
   height: auto;
+  max-width: none;
+  max-height: none;
   transform: translate(-50%, 0);
   object-fit: contain;
   object-position: top center;
-  max-height: none;
   z-index: 1;
   border-radius: 0;
   transition: transform 1800ms cubic-bezier(0.22, 1, 0.36, 1);
@@ -869,6 +877,8 @@ main > .project:first-child {
   .spotlight__copy,
   .spotlight__media {
     flex-basis: 100%;
+    align-self: stretch;
+    width: 100%;
   }
 
   .spotlight__media {
