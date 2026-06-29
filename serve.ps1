@@ -1,12 +1,13 @@
-# Static preview: http://localhost:8842/
+# Static preview: http://localhost:8842/ (default; override with -Port)
 # Run:  .\serve.ps1          — server only
 #       .\serve.ps1 -Open    — also open your default browser (recommended; Cursor Simple Browser often cannot reach localhost)
 param(
-  [switch] $Open
+  [switch] $Open,
+  [int] $Port = 8842
 )
 
 $ErrorActionPreference = "Stop"
-$port = 8842
+$port = $Port
 $root = $PSScriptRoot
 $rootFull = [IO.Path]::GetFullPath($root)
 

@@ -214,13 +214,14 @@ function projectCopyForMedia(mediaEl) {
 }
 
 /**
- * CSS-only hover effects (canvas, COVID stack, SHR zoom, SDOH zoom): on narrow viewports,
+ * CSS-only hover effects (workbench library, canvas, COVID stack, SHR zoom, SDOH zoom): on narrow viewports,
  * add a class when the project *text* block nears the viewport — once — mirroring :hover in CSS.
  */
 function initCssHoverFallbackOnScroll() {
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
   const selectors = [
+    ".project__media--workbench-hover",
     ".project__media--canvas-hover",
     ".project__media--c19-stack",
     ".project__media--shr-hover",
@@ -362,9 +363,53 @@ function initWorkbenchHoverSequence() {
   MOBILE_INTERACTION_MQ.addEventListener("change", bindWorkbenchInteraction);
 }
 
+function initWorkbenchLibraryScroll() {
+  const root = document.querySelector(".project__media--workbench-hover");
+  const stack = root?.querySelector(".workbench-hover__stack");
+  const library = root?.querySelector(".workbench-hover__library");
+  if (!root || !stack || !library) return;
+
+  let resizeObserver = null;
+
+  function measureScrollDistance() {
+    const stackHeight = stack.clientHeight;
+    const topPx = Number.parseFloat(getComputedStyle(library).top) || 0;
+    const renderedWidth = library.clientWidth;
+    const naturalWidth = library.naturalWidth || Number(library.getAttribute("width")) || renderedWidth;
+    const naturalHeight = library.naturalHeight || Number(library.getAttribute("height")) || library.clientHeight;
+    if (!stackHeight || !renderedWidth || !naturalWidth || !naturalHeight) {
+      stack.style.setProperty("--library-scroll-y", "0px");
+      return;
+    }
+
+    const renderedHeight = renderedWidth * (naturalHeight / naturalWidth);
+    const visibleHeight = Math.max(0, stackHeight - topPx);
+    const overflowHeight = Math.max(0, renderedHeight - visibleHeight);
+    stack.style.setProperty("--library-scroll-y", `${overflowHeight}px`);
+  }
+
+  function queueMeasure() {
+    requestAnimationFrame(measureScrollDistance);
+  }
+
+  if (library.complete) {
+    queueMeasure();
+  } else {
+    library.addEventListener("load", queueMeasure, { once: true });
+  }
+
+  window.addEventListener("resize", queueMeasure, { passive: true });
+
+  if ("ResizeObserver" in window) {
+    resizeObserver = new ResizeObserver(queueMeasure);
+    resizeObserver.observe(stack);
+  }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   initHeroLineReveal();
   initWorkbenchHoverSequence();
+  initWorkbenchLibraryScroll();
   initCssHoverFallbackOnScroll();
   window.addEventListener("resize", debouncedHeroSplit, { passive: true });
 
