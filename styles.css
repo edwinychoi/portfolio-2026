@@ -576,6 +576,20 @@ main > .project:first-child {
   color: #ffffff;
 }
 
+.btn:disabled,
+.btn[disabled] {
+  cursor: default;
+  pointer-events: none;
+  opacity: 1;
+}
+
+.btn--solid:disabled,
+.btn--solid[disabled] {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #ffffff;
+}
+
 /* Light pill on dark blue band */
 .btn--solid-on-dark {
   background: var(--color-spotlight-text);
